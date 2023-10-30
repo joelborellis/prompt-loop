@@ -1,4 +1,7 @@
 openai
+openai[datalib]
 python-dotenv
 halo
 tiktoken
+azure-search-documents==11.4.0b8
+azure-identity

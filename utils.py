@@ -11,7 +11,6 @@ import time
 import settings
 from azure.search.documents import SearchClient
 from azure.search.documents.models import Vector
-from langchain.embeddings import OpenAIEmbeddings
 from azure.core.credentials import AzureKeyCredential
 
 
@@ -91,34 +90,34 @@ def search_wikipedia(query: str) -> (str, str):
     return content, url
 
 def search_sales_docs(query: str) -> (str, str):
-    
-    vector_store_address: str = os.environ.get("AZURE_SEARCH_ENDPOINT")
-    vector_store_key: str = os.environ.get("AZURE_SEARCH_ADMIN_KEY")
-    model_embed: str = os.environ.get("OPENAI_MODEL_EMBED")
-    model: str = os.environ.get("OPENAI_MODEL")
-    embeddings: OpenAIEmbeddings = OpenAIEmbeddings(deployment=model_embed, chunk_size=1)
+
+    spinner = Halo(text='Information Foraging...', spinner='dots')
+    spinner.start()
 
     index_name: str = "sales_vector_index"
-    credential_search = AzureKeyCredential(vector_store_key)
+    credential_search = AzureKeyCredential(settings.AZURE_SEARCH_ADMIN_KEY)
 
     search_client = SearchClient(
-                endpoint=vector_store_address,
+                endpoint=settings.AZURE_SEARCH_ENDPOINT,
                 index_name=index_name,
                 credential=credential_search,
             )
     
-    vector = Vector(value=embeddings.embed_query(query), k=3, fields="summaryVector, contentVector")
+    vector = Vector(value=get_embedding(query, settings.OPENAI_MODEL_EMBED), k=3, fields="summaryVector, contentVector")
     results = []
 
     r = search_client.search(  
             search_text=query,  # set this to engage a Hybrid Search
             vectors=[vector],  
-            select=["content", "category", "sourcefile"],
+            select=["sourcefile", "content"],
             top=3,
         )  
     for doc in r:
-        results.append(f"[SOURCEFILE:  {doc['sourcefile']}]" + doc['content'])
+        results.append(f"[SOURCEFILE:  {doc['sourcefile']}]\n" + doc['content'])
         #print("\n".join(results))
+
+    spinner.stop()
+    
     return ("\n".join(results))
 
 def get_system_message(file_name: str):
@@ -139,3 +138,6 @@ def get_system_message(file_name: str):
     else:
         raise ValueError(f"The file {prompt_file_path} does not exist.")
 
+def get_embedding(text, model):
+   text = text.replace("\n", " ")
+   return openai.Embedding.create(input = [text], engine=model)['data'][0]['embedding']
